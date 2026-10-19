@@ -496,18 +496,23 @@ class Simulation:
         self.console.info(f"Paramètre modifié : {key} = {value}")
 
     def _toggle_agent_selection(self, agent_id):
-        """Bascule la sélection d'un agent (checkbox du panneau ou clic monde)."""
+        """Bascule la sélection d'un agent (checkbox du panneau ou clic monde).
+        Un agent mort ne peut pas être (re)sélectionné."""
         if agent_id in self.selected_agents:
             self.selected_agents.remove(agent_id)
             self.console.info(f"Agent {agent_id} désélectionné")
-        else:
-            if len(self.selected_agents) >= self.max_selected_sbn:
-                self.console.error(
-                    "Il n'est pas possible de sélectionner davantage d'agents ; "
-                    "modifiez la valeur du paramètre MAX_SELECTED_SBN")
-                return
-            self.selected_agents.append(agent_id)
-            self.console.info(f"Agent {agent_id} sélectionné (onglet {len(self.selected_agents)})")
+            return
+        # Vérifie que l'agent est vivant avant de le sélectionner
+        if not any(a.id == agent_id and a.alive for a in self.agents):
+            self.console.info(f"Agent {agent_id} n'est plus vivant — sélection impossible")
+            return
+        if len(self.selected_agents) >= self.max_selected_sbn:
+            self.console.error(
+                "Il n'est pas possible de sélectionner davantage d'agents ; "
+                "modifiez la valeur du paramètre MAX_SELECTED_SBN")
+            return
+        self.selected_agents.append(agent_id)
+        self.console.info(f"Agent {agent_id} sélectionné (onglet {len(self.selected_agents)})")
 
     def _handle_world_click(self, wx, wy, button=1):
         """Clic gauche (1) = sélectionner ; clic droit (3) = désélectionner."""
@@ -694,6 +699,13 @@ class Simulation:
         self.agents = [a for a in self.agents if a.alive]
         self.foods = [f for f in self.foods if f.alive]
         self.agents.extend(new_enfants)
+
+        # Retirer de la sélection les agents morts (ils ne sont plus affichables)
+        alive_ids = {a.id for a in self.agents}
+        dead_selected = [aid for aid in self.selected_agents if aid not in alive_ids]
+        if dead_selected:
+            self.selected_agents = [aid for aid in self.selected_agents if aid in alive_ids]
+            self.left_panel.update_selected(self.selected_agents)
 
         # Vérifier extinction
         if len(self.agents) == 0:
